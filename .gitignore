@@ -1,0 +1,15 @@
+# Database locale (usato solo come fallback in sviluppo: su Streamlit Cloud si usa Turso)
+data/app.db
+data/app.db-*
+
+# Secrets (mai da versionare: contengono il token Turso)
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
