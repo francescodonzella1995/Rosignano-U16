@@ -4,13 +4,14 @@ Home dell'app - Rosignano Tancredi Under 16.
 import streamlit as st
 
 import db
-from helpers import ensure_db_ready, get_team, get_players
+from helpers import ensure_db_ready, get_team, get_players, apply_team_theme
 
 st.set_page_config(page_title="Rosignano Tancredi U16", page_icon="⚽", layout="wide")
 
 ensure_db_ready()
 
 team = get_team()
+apply_team_theme(team)
 nome_squadra = team["nome_squadra"] if team and team.get("nome_squadra") else None
 
 st.title(f"⚽ {nome_squadra or 'Gestione Squadra'}")
@@ -40,7 +41,7 @@ st.markdown(
 Usa il menu a sinistra per navigare tra le sezioni:
 
 - **Board Iniziale**: nome squadra, colori, rosa giocatori
-- **Board Manuale**: catalogo esercizi di allenamento
+- **Eserciziario**: catalogo esercizi di allenamento
 - **Board Allenamenti**: registro sedute svolte + statistiche
 - **Board Partite**: storico partite
 - **Board Rosa**: statistiche automatiche per giocatore

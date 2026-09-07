@@ -9,10 +9,11 @@ import pandas as pd
 import streamlit as st
 
 import db
-from helpers import ensure_db_ready, get_players, player_label, confirm_action
+from helpers import ensure_db_ready, get_players, get_team, player_label, confirm_action, apply_team_theme
 
 st.set_page_config(page_title="Board Allenamenti", page_icon="📅", layout="wide")
 ensure_db_ready()
+apply_team_theme(get_team())
 
 st.title("📅 Board Allenamenti")
 

@@ -1,22 +1,27 @@
 """
-Board Manuale: catalogo degli esercizi di allenamento, organizzati per categoria.
+Eserciziario: catalogo degli esercizi di allenamento, organizzati per categoria.
 """
 from __future__ import annotations
-
-import os
-import uuid
 
 import streamlit as st
 
 import db
-from helpers import ensure_db_ready, asset_path, confirm_action, ASSETS_DIR
+from helpers import (
+    ensure_db_ready,
+    get_team,
+    apply_team_theme,
+    exercise_image_source,
+    encode_uploaded_image,
+    confirm_action,
+)
 
-st.set_page_config(page_title="Board Manuale", page_icon="📘", layout="wide")
+st.set_page_config(page_title="Eserciziario", page_icon="📘", layout="wide")
 ensure_db_ready()
+apply_team_theme(get_team())
 
-st.title("📘 Board Manuale - Catalogo Esercizi")
+st.title("📘 Eserciziario")
 
-CUSTOM_IMG_DIR = os.path.join(ASSETS_DIR, "manuale", "custom")
+MAX_IMG_MB = 5
 
 
 def get_categories() -> list[str]:
@@ -66,6 +71,10 @@ with st.expander("➕ Aggiungi nuovo esercizio"):
             dimensioni = st.text_input("Dimensioni campo (facoltativo)")
             regole = st.text_area("Regole (facoltativo)", height=80)
         immagine_upload = st.file_uploader("Immagine (facoltativa)", type=["png", "jpg", "jpeg"])
+        video_url = st.text_input(
+            "Link video (facoltativo)",
+            placeholder="es. link YouTube, Google Drive, WeTransfer...",
+        )
         submitted_ex = st.form_submit_button("Aggiungi esercizio", type="primary")
 
     if submitted_ex:
@@ -73,24 +82,21 @@ with st.expander("➕ Aggiungi nuovo esercizio"):
             st.error("Devi selezionare (o creare) una categoria.")
         elif not nome_ex.strip():
             st.error("Il nome dell'esercizio è obbligatorio.")
+        elif immagine_upload is not None and immagine_upload.size > MAX_IMG_MB * 1024 * 1024:
+            st.error(f"L'immagine supera i {MAX_IMG_MB} MB: usane una più leggera.")
         else:
-            immagine_rel = None
+            immagine_dati = immagine_mime = None
             if immagine_upload is not None:
-                os.makedirs(CUSTOM_IMG_DIR, exist_ok=True)
-                ext = os.path.splitext(immagine_upload.name)[1] or ".png"
-                fname = f"{uuid.uuid4().hex}{ext}"
-                with open(os.path.join(CUSTOM_IMG_DIR, fname), "wb") as f:
-                    f.write(immagine_upload.getbuffer())
-                immagine_rel = f"manuale/custom/{fname}"
+                immagine_dati, immagine_mime = encode_uploaded_image(immagine_upload)
             db.execute(
                 """INSERT INTO exercises
-                   (categoria, nome, immagine_path, num_giocatori, obiettivo, dimensioni_campo,
-                    num_colori_casacche, regole, fonte)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (categoria, nome, immagine_path, immagine_dati, immagine_mime, num_giocatori,
+                    obiettivo, dimensioni_campo, num_colori_casacche, regole, fonte, video_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
-                    categoria_sel, nome_ex.strip(), immagine_rel, num_giocatori.strip(),
-                    obiettivo.strip(), dimensioni.strip(), num_colori.strip(), regole.strip(),
-                    "Inserito manualmente",
+                    categoria_sel, nome_ex.strip(), None, immagine_dati, immagine_mime,
+                    num_giocatori.strip(), obiettivo.strip(), dimensioni.strip(), num_colori.strip(),
+                    regole.strip(), "Inserito manualmente", video_url.strip(),
                 ],
             )
             st.success(f"Esercizio '{nome_ex}' aggiunto.")
@@ -132,31 +138,60 @@ for categoria, lista in esercizi_per_categoria.items():
     st.subheader(categoria)
     for ex in lista:
         with st.expander(ex["nome"]):
-            img_path = asset_path(ex.get("immagine_path"))
+            img_source = exercise_image_source(ex)
             colimg, colform = st.columns([1, 2])
             with colimg:
-                if img_path:
-                    st.image(img_path, width='stretch')
+                if img_source:
+                    st.image(img_source, width='stretch')
                 else:
                     st.caption("Nessuna immagine disponibile.")
+                if ex.get("video_url"):
+                    st.markdown(f"🎬 [Guarda il video]({ex['video_url']})")
             with colform:
                 with st.form(f"edit_ex_{ex['id']}"):
+                    e_nome = st.text_input("Nome esercizio", value=ex.get("nome") or "")
                     e_num_giocatori = st.text_input("Numero giocatori", value=ex.get("num_giocatori") or "")
                     e_obiettivo = st.text_area("Obiettivo", value=ex.get("obiettivo") or "", height=70)
                     e_dimensioni = st.text_input("Dimensioni campo", value=ex.get("dimensioni_campo") or "")
                     e_num_colori = st.text_input("Numero colori casacche", value=ex.get("num_colori_casacche") or "")
                     e_regole = st.text_area("Regole", value=ex.get("regole") or "", height=100)
+                    e_video_url = st.text_input("Link video", value=ex.get("video_url") or "")
+                    e_immagine_upload = st.file_uploader(
+                        "Sostituisci immagine (lascia vuoto per non cambiarla)",
+                        type=["png", "jpg", "jpeg"],
+                        key=f"img_upload_{ex['id']}",
+                    )
                     if ex.get("fonte"):
                         st.caption(f"Fonte: {ex['fonte']}")
                     salva = st.form_submit_button("Salva modifiche")
                 if salva:
-                    db.execute(
-                        """UPDATE exercises SET num_giocatori=?, obiettivo=?, dimensioni_campo=?,
-                           num_colori_casacche=?, regole=? WHERE id=?""",
-                        [e_num_giocatori, e_obiettivo, e_dimensioni, e_num_colori, e_regole, ex["id"]],
-                    )
-                    st.success("Modifiche salvate.")
-                    st.rerun()
+                    if not e_nome.strip():
+                        st.error("Il nome dell'esercizio non può essere vuoto.")
+                    elif e_immagine_upload is not None and e_immagine_upload.size > MAX_IMG_MB * 1024 * 1024:
+                        st.error(f"L'immagine supera i {MAX_IMG_MB} MB: usane una più leggera.")
+                    else:
+                        if e_immagine_upload is not None:
+                            nuova_dati, nuova_mime = encode_uploaded_image(e_immagine_upload)
+                            db.execute(
+                                """UPDATE exercises SET nome=?, num_giocatori=?, obiettivo=?, dimensioni_campo=?,
+                                   num_colori_casacche=?, regole=?, video_url=?, immagine_dati=?, immagine_mime=?
+                                   WHERE id=?""",
+                                [
+                                    e_nome.strip(), e_num_giocatori, e_obiettivo, e_dimensioni, e_num_colori,
+                                    e_regole, e_video_url.strip(), nuova_dati, nuova_mime, ex["id"],
+                                ],
+                            )
+                        else:
+                            db.execute(
+                                """UPDATE exercises SET nome=?, num_giocatori=?, obiettivo=?, dimensioni_campo=?,
+                                   num_colori_casacche=?, regole=?, video_url=? WHERE id=?""",
+                                [
+                                    e_nome.strip(), e_num_giocatori, e_obiettivo, e_dimensioni, e_num_colori,
+                                    e_regole, e_video_url.strip(), ex["id"],
+                                ],
+                            )
+                        st.success("Modifiche salvate.")
+                        st.rerun()
 
                 n_usi = db.query_one(
                     "SELECT COUNT(*) AS c FROM training_exercises WHERE exercise_id = ?", [ex["id"]]
@@ -165,7 +200,7 @@ for categoria, lista in esercizi_per_categoria.items():
                     key=f"delete_ex_{ex['id']}",
                     button_label="🗑️ Elimina esercizio",
                     warning_text=(
-                        f"Stai per eliminare definitivamente l'esercizio **{ex['nome']}** dal Manuale. "
+                        f"Stai per eliminare definitivamente l'esercizio **{ex['nome']}** dall'Eserciziario. "
                         + (
                             f"È stato usato in {n_usi} allenamenti registrati: resterà nello storico di "
                             "quegli allenamenti, ma non sarà più selezionabile per i nuovi. "

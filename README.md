@@ -12,7 +12,7 @@ project/
 ├── requirements.txt                # Librerie Python richieste
 ├── pages/
 │   ├── 1_🏠_Board_Iniziale.py      # Squadra, colori, rosa (import Excel + manuale)
-│   ├── 2_📘_Board_Manuale.py       # Catalogo esercizi di allenamento
+│   ├── 2_📘_Eserciziario.py        # Catalogo esercizi di allenamento
 │   ├── 3_📅_Board_Allenamenti.py   # Registro allenamenti svolti + statistiche
 │   ├── 4_🏟️_Board_Partite.py       # Storico partite, distinte, marcatori
 │   ├── 5_📊_Board_Rosa.py          # Statistiche automatiche per giocatore
@@ -110,6 +110,29 @@ Git).
 Da questo momento, ogni volta che fai `git push` di modifiche al codice,
 Streamlit Cloud aggiorna automaticamente l'app online.
 
+## 3bis. Aggiornare l'app dopo una modifica al codice
+
+Ogni volta che il codice del progetto viene modificato (es. da Claude, dopo
+una richiesta di miglioria), per far arrivare la modifica sull'app online
+servono questi passaggi, dalla cartella del progetto sul tuo computer:
+
+```bash
+git add .
+git commit -m "Descrizione modifica"
+git push
+```
+
+- `git add .` prepara tutti i file modificati.
+- `git commit -m "Descrizione modifica"` crea un "pacchetto" con le modifiche:
+  la scritta tra virgolette è solo una breve nota per te stesso (e per la
+  cronologia del progetto) su cosa è cambiato — es.
+  `git commit -m "Rinominato Board Manuale in Eserciziario, aggiunto tema colori"`.
+  Non è un comando magico: puoi scrivere qualunque frase descrittiva, anche
+  breve, non influisce sul funzionamento dell'app.
+- `git push` invia le modifiche a GitHub. Da lì, Streamlit Cloud se ne accorge
+  da solo e aggiorna l'app online in automatico, di solito in meno di un
+  minuto, senza altre azioni da parte tua.
+
 ## 4. Uso in locale (facoltativo, per provare o modificare l'app)
 
 ```bash
@@ -136,6 +159,30 @@ Nella pagina **Backup** dell'app:
   cosa verrà eliminato e cosa verrà ripristinato, e chiede una conferma
   esplicita prima di procedere, perché **questa operazione sostituisce
   completamente i dati attuali**.
+
+## Colori squadra e tema dell'app
+
+I colori impostati in **Board Iniziale** (colore primario e colore secondario)
+vengono usati automaticamente come tema grafico di tutta l'app: il colore
+primario è lo sfondo della parte centrale, il secondario è lo sfondo della
+barra laterale, e le caselle di testo hanno uno sfondo primario più scuro con
+bordo del colore secondario. Il colore del testo (bianco o nero) viene scelto
+automaticamente per restare sempre leggibile. Se i colori non sono ancora
+stati impostati, l'app usa il tema grafico predefinito di Streamlit.
+
+## Eserciziario: nome, immagine e video degli esercizi
+
+Da ogni scheda esercizio, nel form di modifica, puoi ora: cambiare il nome
+dell'esercizio, sostituire l'immagine (carica un nuovo file: quella vecchia
+viene sostituita) e aggiungere un link a un video (es. YouTube, Google Drive,
+WeTransfer). Il video è gestito come link esterno e non come file caricato:
+i video pesano molto di più delle immagini, e caricarli direttamente
+nell'app rischierebbe di rallentarla o di superare i limiti del database —
+un link esterno resta invece leggero e affidabile. Le immagini caricate
+manualmente (sia in "Aggiungi nuovo esercizio" sia sostituendo un'immagine
+esistente) vengono salvate direttamente nel database (Turso), non sul disco
+del server, cosa necessaria perché su Streamlit Cloud i file salvati su disco
+possono andare persi ad ogni redeploy.
 
 ## Note sui dati iniziali del Manuale
 

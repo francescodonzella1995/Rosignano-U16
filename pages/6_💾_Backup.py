@@ -9,10 +9,11 @@ import json
 import streamlit as st
 
 import db
-from helpers import ensure_db_ready, confirm_action
+from helpers import ensure_db_ready, get_team, confirm_action, apply_team_theme
 
 st.set_page_config(page_title="Backup", page_icon="💾", layout="wide")
 ensure_db_ready()
+apply_team_theme(get_team())
 
 st.title("💾 Backup dei dati")
 

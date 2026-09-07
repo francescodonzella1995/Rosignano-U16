@@ -202,6 +202,18 @@ CREATE TABLE IF NOT EXISTS player_notes (
 """
 
 
+def _ensure_column(table: str, column: str, coltype: str) -> None:
+    """Aggiunge una colonna a una tabella già esistente, se non c'è già.
+
+    Serve per far evolvere lo schema (es. nuovi campi aggiunti in versioni
+    successive dell'app) senza perdere i dati già presenti nel database.
+    """
+    info = query_all(f"PRAGMA table_info({table})")
+    existing = {row["name"] for row in info}
+    if column not in existing:
+        execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+
 def init_db() -> None:
     client = get_client()
     for statement in SCHEMA.split(";"):
@@ -212,6 +224,11 @@ def init_db() -> None:
         client.execute(
             "INSERT INTO team (id, nome_squadra, colore_primario, colore_secondario) VALUES (1, '', '', '')"
         )
+    # Colonne aggiunte dopo la prima versione dello schema (migrazione automatica,
+    # non tocca i dati già presenti nelle altre colonne):
+    _ensure_column("exercises", "immagine_dati", "TEXT")
+    _ensure_column("exercises", "immagine_mime", "TEXT")
+    _ensure_column("exercises", "video_url", "TEXT")
 
 
 # ---------------------------------------------------------------------------
