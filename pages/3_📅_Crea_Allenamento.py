@@ -160,6 +160,125 @@ else:
                 st.write("**Esercizi svolti:** nessuno registrato")
 
             st.markdown("---")
+            edit_key = f"_edit_mode_training_{t['id']}"
+            if st.button(
+                "✖️ Annulla modifica" if st.session_state.get(edit_key) else "✏️ Modifica giocatori ed esercizi",
+                key=f"toggle_edit_{t['id']}",
+            ):
+                st.session_state[edit_key] = not st.session_state.get(edit_key, False)
+                st.rerun()
+
+            if st.session_state.get(edit_key):
+                st.markdown("**Modifica presenze**")
+                current_att = {
+                    r["player_id"]: r
+                    for r in db.query_all(
+                        "SELECT player_id, presente, motivo FROM training_attendance WHERE training_id=?",
+                        [t["id"]],
+                    )
+                }
+                edit_active_players = get_players(only_active=True)
+                edit_active_ids = {p["id"] for p in edit_active_players}
+                edit_extra_ids = set(current_att.keys()) - edit_active_ids
+                edit_extra_players = []
+                if edit_extra_ids:
+                    ph_extra = ",".join("?" for _ in edit_extra_ids)
+                    edit_extra_players = db.query_all(
+                        f"SELECT * FROM players WHERE id IN ({ph_extra})", list(edit_extra_ids)
+                    )
+                edit_players_list = edit_active_players + edit_extra_players
+                if edit_extra_players:
+                    st.caption(
+                        "Alcuni giocatori qui sotto non sono più nella rosa attiva, ma erano presenti/assenti "
+                        "in questo allenamento: puoi comunque modificarne lo stato."
+                    )
+
+                edit_presenze: dict[int, bool] = {}
+                edit_motivi: dict[int, str] = {}
+                if not edit_players_list:
+                    st.info("Nessun giocatore disponibile.")
+                else:
+                    n_cols_edit = 3
+                    cols_edit = st.columns(n_cols_edit)
+                    for i, p in enumerate(edit_players_list):
+                        default_presente = current_att.get(p["id"], {}).get("presente", 1) == 1
+                        with cols_edit[i % n_cols_edit]:
+                            edit_presenze[p["id"]] = st.checkbox(
+                                player_label(p),
+                                value=default_presente,
+                                key=f"edit_presente_{t['id']}_{p['id']}",
+                            )
+                            if not edit_presenze[p["id"]]:
+                                default_motivo = current_att.get(p["id"], {}).get("motivo") or ""
+                                edit_motivi[p["id"]] = st.text_input(
+                                    f"Motivo assenza di {player_label(p)}",
+                                    value=default_motivo,
+                                    key=f"edit_motivo_{t['id']}_{p['id']}",
+                                    placeholder="es. infortunio, scuola, permesso...",
+                                    label_visibility="collapsed",
+                                )
+
+                st.markdown("**Modifica esercizi svolti**")
+                current_ex_ids = {
+                    r["exercise_id"]
+                    for r in db.query_all(
+                        "SELECT exercise_id FROM training_exercises WHERE training_id=?", [t["id"]]
+                    )
+                }
+                categorie_edit = sorted(
+                    {e["categoria"] for e in db.query_all("SELECT DISTINCT categoria FROM exercises")}
+                )
+                edit_filtro_cat = st.multiselect(
+                    "Filtra esercizi per categoria",
+                    categorie_edit,
+                    default=[],
+                    key=f"edit_filtro_cat_{t['id']}",
+                )
+                edit_ex_query = "SELECT id, categoria, nome FROM exercises"
+                edit_ex_params: list = []
+                if edit_filtro_cat:
+                    ph_cat = ",".join("?" for _ in edit_filtro_cat)
+                    edit_ex_query += f" WHERE categoria IN ({ph_cat})"
+                    edit_ex_params.extend(edit_filtro_cat)
+                edit_ex_query += " ORDER BY categoria, nome"
+                edit_ex_disponibili = db.query_all(edit_ex_query, edit_ex_params)
+                edit_ex_options = {f"[{e['categoria']}] {e['nome']}": e["id"] for e in edit_ex_disponibili}
+                # assicura che gli esercizi già selezionati restino visibili anche se il filtro li esclude
+                for ex_id in current_ex_ids:
+                    if ex_id not in edit_ex_options.values():
+                        ex_row = db.query_one("SELECT id, categoria, nome FROM exercises WHERE id=?", [ex_id])
+                        if ex_row:
+                            edit_ex_options[f"[{ex_row['categoria']}] {ex_row['nome']}"] = ex_row["id"]
+                label_by_id = {v: k for k, v in edit_ex_options.items()}
+                default_labels = [label_by_id[eid] for eid in current_ex_ids if eid in label_by_id]
+                edit_esercizi_scelti = st.multiselect(
+                    "Esercizi svolti",
+                    list(edit_ex_options.keys()),
+                    default=default_labels,
+                    key=f"edit_esercizi_{t['id']}",
+                )
+
+                if st.button("💾 Salva modifiche allenamento", key=f"save_edit_{t['id']}", type="primary"):
+                    db.execute("DELETE FROM training_attendance WHERE training_id=?", [t["id"]])
+                    for pid, presente in edit_presenze.items():
+                        motivo_pid = (edit_motivi.get(pid, "") or "").strip() if not presente else ""
+                        db.execute(
+                            "INSERT INTO training_attendance (training_id, player_id, presente, motivo) "
+                            "VALUES (?, ?, ?, ?)",
+                            [t["id"], pid, 1 if presente else 0, motivo_pid],
+                        )
+                    db.execute("DELETE FROM training_exercises WHERE training_id=?", [t["id"]])
+                    for label in edit_esercizi_scelti:
+                        ex_id = edit_ex_options[label]
+                        db.execute(
+                            "INSERT INTO training_exercises (training_id, exercise_id) VALUES (?, ?)",
+                            [t["id"], ex_id],
+                        )
+                    st.session_state[edit_key] = False
+                    st.success("Modifiche salvate.")
+                    st.rerun()
+
+            st.markdown("---")
             pdf_key = f"_pdf_bytes_training_{t['id']}"
             if st.button("📄 Genera PDF allenamento", key=f"gen_pdf_{t['id']}"):
                 team_pdf = get_team()
