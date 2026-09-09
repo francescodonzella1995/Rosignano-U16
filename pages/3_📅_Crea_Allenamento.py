@@ -1,5 +1,5 @@
 """
-Board Catalogo Allenamenti: registro delle sedute svolte + statistiche/insight.
+Crea Allenamento: registro delle sedute svolte + statistiche/insight.
 """
 from __future__ import annotations
 
@@ -10,12 +10,13 @@ import streamlit as st
 
 import db
 from helpers import ensure_db_ready, get_players, get_team, player_label, confirm_action, apply_team_theme
+from pdf_export import build_training_pdf
 
-st.set_page_config(page_title="Board Allenamenti", page_icon="📅", layout="wide")
+st.set_page_config(page_title="Crea Allenamento", page_icon="📅", layout="wide")
 ensure_db_ready()
 apply_team_theme(get_team())
 
-st.title("📅 Board Allenamenti")
+st.title("📅 Crea Allenamento")
 
 GIORNI_IT = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
@@ -26,44 +27,60 @@ st.header("Registra nuovo allenamento")
 
 players = get_players(only_active=True)
 
-with st.form("form_new_training"):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        data_all = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY")
-    with c2:
-        ora_all = st.time_input("Ora", value=dt.time(18, 0))
-    with c3:
-        durata_all = st.number_input("Durata (minuti)", min_value=0, max_value=300, step=5, value=0)
+# NB: questa sezione non usa st.form perché il campo "motivo assenza" deve
+# comparire subito, appena si deseleziona un giocatore — con un form i
+# widget non si aggiornano finché non si preme il pulsante di invio finale.
+c1, c2, c3 = st.columns(3)
+with c1:
+    data_all = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY", key="new_training_data")
+with c2:
+    ora_all = st.time_input("Ora", value=dt.time(18, 0), key="new_training_ora")
+with c3:
+    durata_all = st.number_input(
+        "Durata (minuti)", min_value=0, max_value=300, step=5, value=0, key="new_training_durata"
+    )
 
-    st.markdown("**Presenze** (tutti selezionati come presenti di default, deseleziona gli assenti)")
-    presenze: dict[int, bool] = {}
-    if not players:
-        st.info("Nessun giocatore in rosa. Vai alla Board Iniziale per aggiungerli.")
-    else:
-        n_cols = 3
-        cols = st.columns(n_cols)
-        for i, p in enumerate(players):
-            with cols[i % n_cols]:
-                presenze[p["id"]] = st.checkbox(player_label(p), value=True, key=f"presente_{p['id']}")
+st.markdown("**Presenze** (tutti selezionati come presenti di default, deseleziona gli assenti e indica il motivo)")
+presenze: dict[int, bool] = {}
+motivi: dict[int, str] = {}
+if not players:
+    st.info("Nessun giocatore in rosa. Vai alla Board Iniziale per aggiungerli.")
+else:
+    n_cols = 3
+    cols = st.columns(n_cols)
+    for i, p in enumerate(players):
+        with cols[i % n_cols]:
+            presenze[p["id"]] = st.checkbox(player_label(p), value=True, key=f"presente_{p['id']}")
+            if not presenze[p["id"]]:
+                motivi[p["id"]] = st.text_input(
+                    f"Motivo assenza di {player_label(p)}",
+                    key=f"motivo_{p['id']}",
+                    placeholder="es. infortunio, scuola, permesso...",
+                    label_visibility="collapsed",
+                )
 
-    st.markdown("**Esercizi svolti**")
-    categorie_disponibili = sorted({e["categoria"] for e in db.query_all("SELECT DISTINCT categoria FROM exercises")})
-    filtro_cat = st.multiselect("Filtra esercizi per categoria", categorie_disponibili, default=[])
+st.markdown("**Esercizi svolti**")
+categorie_disponibili = sorted({e["categoria"] for e in db.query_all("SELECT DISTINCT categoria FROM exercises")})
+filtro_cat = st.multiselect(
+    "Filtra esercizi per categoria", categorie_disponibili, default=[], key="new_training_filtro_cat"
+)
 
-    ex_query = "SELECT id, categoria, nome FROM exercises"
-    ex_params: list = []
-    if filtro_cat:
-        placeholders = ",".join("?" for _ in filtro_cat)
-        ex_query += f" WHERE categoria IN ({placeholders})"
-        ex_params.extend(filtro_cat)
-    ex_query += " ORDER BY categoria, nome"
-    esercizi_disponibili = db.query_all(ex_query, ex_params)
-    ex_options = {f"[{e['categoria']}] {e['nome']}": e["id"] for e in esercizi_disponibili}
-    esercizi_scelti_label = st.multiselect("Seleziona esercizi svolti", list(ex_options.keys()))
+ex_query = "SELECT id, categoria, nome FROM exercises"
+ex_params: list = []
+if filtro_cat:
+    placeholders = ",".join("?" for _ in filtro_cat)
+    ex_query += f" WHERE categoria IN ({placeholders})"
+    ex_params.extend(filtro_cat)
+ex_query += " ORDER BY categoria, nome"
+esercizi_disponibili = db.query_all(ex_query, ex_params)
+ex_options = {f"[{e['categoria']}] {e['nome']}": e["id"] for e in esercizi_disponibili}
+esercizi_scelti_label = st.multiselect(
+    "Seleziona esercizi svolti", list(ex_options.keys()), key="new_training_esercizi"
+)
 
-    note_all = st.text_area("Note (facoltativo)", height=70)
+note_all = st.text_area("Note (facoltativo)", height=70, key="new_training_note")
 
-    submitted_training = st.form_submit_button("Salva allenamento", type="primary")
+submitted_training = st.button("Salva allenamento", type="primary", key="submit_new_training")
 
 if submitted_training:
     if not players:
@@ -74,9 +91,10 @@ if submitted_training:
             [data_all.isoformat(), ora_all.strftime("%H:%M"), int(durata_all), note_all.strip()],
         )
         for pid, presente in presenze.items():
+            motivo_pid = (motivi.get(pid, "") or "").strip() if not presente else ""
             db.execute(
-                "INSERT INTO training_attendance (training_id, player_id, presente) VALUES (?, ?, ?)",
-                [new_id, pid, 1 if presente else 0],
+                "INSERT INTO training_attendance (training_id, player_id, presente, motivo) VALUES (?, ?, ?, ?)",
+                [new_id, pid, 1 if presente else 0, motivo_pid],
             )
         for label in esercizi_scelti_label:
             ex_id = ex_options[label]
@@ -117,26 +135,51 @@ else:
                 st.write(f"**Note:** {t['note']}")
 
             assenti = db.query_all(
-                """SELECT p.* FROM training_attendance ta JOIN players p ON p.id = ta.player_id
+                """SELECT p.*, ta.motivo FROM training_attendance ta JOIN players p ON p.id = ta.player_id
                    WHERE ta.training_id = ? AND ta.presente = 0 ORDER BY p.cognome, p.nome""",
                 [t["id"]],
             )
             if assenti:
-                st.write("**Assenti:** " + ", ".join(player_label(p) for p in assenti))
+                st.write("**Assenti:**")
+                for a in assenti:
+                    motivo_txt = f" — {a['motivo']}" if a.get("motivo") else " — motivo non indicato"
+                    st.write(f"- {player_label(a)}{motivo_txt}")
             else:
                 st.write("**Assenti:** nessuno")
 
-            ex_used = db.query_all(
-                """SELECT e.categoria, e.nome FROM training_exercises te JOIN exercises e ON e.id = te.exercise_id
+            ex_used_full = db.query_all(
+                """SELECT e.* FROM training_exercises te JOIN exercises e ON e.id = te.exercise_id
                    WHERE te.training_id = ? ORDER BY e.categoria, e.nome""",
                 [t["id"]],
             )
-            if ex_used:
+            if ex_used_full:
                 st.write("**Esercizi svolti:**")
-                for e in ex_used:
+                for e in ex_used_full:
                     st.write(f"- [{e['categoria']}] {e['nome']}")
             else:
                 st.write("**Esercizi svolti:** nessuno registrato")
+
+            st.markdown("---")
+            pdf_key = f"_pdf_bytes_training_{t['id']}"
+            if st.button("📄 Genera PDF allenamento", key=f"gen_pdf_{t['id']}"):
+                team_pdf = get_team()
+                assenti_per_pdf = [
+                    {"nome_completo": player_label(a), "motivo": a.get("motivo")} for a in assenti
+                ]
+                st.session_state[pdf_key] = build_training_pdf(
+                    team_pdf.get("nome_squadra") if team_pdf else None,
+                    t,
+                    assenti_per_pdf,
+                    ex_used_full,
+                )
+            if st.session_state.get(pdf_key):
+                st.download_button(
+                    "⬇️ Scarica PDF",
+                    data=st.session_state[pdf_key],
+                    file_name=f"allenamento_{t['data']}.pdf",
+                    mime="application/pdf",
+                    key=f"download_pdf_{t['id']}",
+                )
 
             confirm_action(
                 key=f"delete_training_{t['id']}",

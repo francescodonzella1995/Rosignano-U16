@@ -13,8 +13,8 @@ project/
 ├── pages/
 │   ├── 1_🏠_Board_Iniziale.py      # Squadra, colori, rosa (import Excel + manuale)
 │   ├── 2_📘_Eserciziario.py        # Catalogo esercizi di allenamento
-│   ├── 3_📅_Board_Allenamenti.py   # Registro allenamenti svolti + statistiche
-│   ├── 4_🏟️_Board_Partite.py       # Storico partite, distinte, marcatori
+│   ├── 3_📅_Crea_Allenamento.py    # Registro allenamenti svolti + statistiche + export PDF
+│   ├── 4_🏟️_Crea_Partite.py        # Storico partite, distinte, marcatori
 │   ├── 5_📊_Board_Rosa.py          # Statistiche automatiche per giocatore
 │   └── 6_💾_Backup.py              # Esporta/importa una copia di sicurezza dei dati
 ├── assets/
@@ -183,6 +183,19 @@ manualmente (sia in "Aggiungi nuovo esercizio" sia sostituendo un'immagine
 esistente) vengono salvate direttamente nel database (Turso), non sul disco
 del server, cosa necessaria perché su Streamlit Cloud i file salvati su disco
 possono andare persi ad ogni redeploy.
+
+## Crea Allenamento: motivo assenze e PDF riepilogativo
+
+Quando registri un nuovo allenamento e deselezioni un giocatore come assente,
+compare subito un campo per indicarne il motivo (facoltativo). Il motivo
+resta salvato insieme alla presenza/assenza e viene mostrato sia nello
+storico sia nel PDF.
+
+Per ogni allenamento nello storico è disponibile un pulsante "Genera PDF
+allenamento": crea un documento con una prima pagina di riepilogo (data, ora,
+durata, assenti con motivazione, elenco degli esercizi svolti) seguita da una
+pagina per ciascun esercizio con la sua immagine, così puoi stamparlo o
+condividerlo facilmente.
 
 ## Note sui dati iniziali del Manuale
 

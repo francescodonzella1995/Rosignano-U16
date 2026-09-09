@@ -42,8 +42,8 @@ Usa il menu a sinistra per navigare tra le sezioni:
 
 - **Board Iniziale**: nome squadra, colori, rosa giocatori
 - **Eserciziario**: catalogo esercizi di allenamento
-- **Board Allenamenti**: registro sedute svolte + statistiche
-- **Board Partite**: storico partite
+- **Crea Allenamento**: registro sedute svolte + statistiche
+- **Crea Partite**: storico partite
 - **Board Rosa**: statistiche automatiche per giocatore
 - **Backup**: esporta/importa i dati (copia di sicurezza)
 """

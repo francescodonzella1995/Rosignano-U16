@@ -1,5 +1,5 @@
 """
-Board Partite: storico partite, distinta, eventi (gol/assist/cartellini/infortuni) e filtri.
+Crea Partite: storico partite, distinta, eventi (gol/assist/cartellini/infortuni) e filtri.
 """
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ import streamlit as st
 import db
 from helpers import ensure_db_ready, get_players, get_team, player_label, confirm_action, apply_team_theme
 
-st.set_page_config(page_title="Board Partite", page_icon="🏟️", layout="wide")
+st.set_page_config(page_title="Crea Partite", page_icon="🏟️", layout="wide")
 ensure_db_ready()
 apply_team_theme(get_team())
 
-st.title("🏟️ Board Partite")
+st.title("🏟️ Crea Partite")
 
 TIPI_EVENTO = ["Gol", "Assist", "Ammonizione", "Espulsione", "Infortunio"]
 

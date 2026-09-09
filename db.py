@@ -229,6 +229,7 @@ def init_db() -> None:
     _ensure_column("exercises", "immagine_dati", "TEXT")
     _ensure_column("exercises", "immagine_mime", "TEXT")
     _ensure_column("exercises", "video_url", "TEXT")
+    _ensure_column("training_attendance", "motivo", "TEXT")
 
 
 # ---------------------------------------------------------------------------
