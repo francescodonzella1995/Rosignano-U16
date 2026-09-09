@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 import db
-from helpers import ensure_db_ready, get_players, get_team, player_label, apply_team_theme
+from helpers import ensure_db_ready, get_players, get_team, player_label, apply_team_theme, TIPI_PARTITA
 
 st.set_page_config(page_title="Inserisci Dati", page_icon="📝", layout="wide")
 ensure_db_ready()
@@ -121,6 +121,7 @@ else:
         c1, c2, c3 = st.columns(3)
         with c1:
             data_match = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY")
+            tipo_match = st.selectbox("Tipo partita", TIPI_PARTITA)
             avversario = st.text_input("Avversario")
         with c2:
             casa_trasferta = st.selectbox("Casa / Trasferta", ["Casa", "Trasferta"])
@@ -133,7 +134,10 @@ else:
             with gc2:
                 gol_subiti = st.number_input("Gol subiti", min_value=0, step=1, value=0)
 
-        st.markdown("**Distinta**: seleziona i convocati, chi è titolare e i minuti di ingresso/uscita dei subentrati.")
+        st.markdown(
+            "**Distinta**: seleziona i convocati, chi è titolare, i minuti di ingresso/uscita dei subentrati "
+            "e, se vuoi, gol/assist/cartellini segnati durante la partita."
+        )
         if not players:
             st.info("Nessun giocatore in rosa. Vai alla Board Iniziale per aggiungerli.")
             distinta_edited = None
@@ -147,6 +151,10 @@ else:
                     "Minuto ingresso": [None for _ in players],
                     "Minuto uscita": [None for _ in players],
                     "Ruolo in campo": ["" for _ in players],
+                    "Gol": [0 for _ in players],
+                    "Assist": [0 for _ in players],
+                    "Ammonito": [False for _ in players],
+                    "Espulso": [False for _ in players],
                 }
             )
             distinta_edited = st.data_editor(
@@ -155,10 +163,15 @@ else:
                 num_rows="fixed",
                 disabled=["player_id", "Giocatore"],
                 hide_index=True,
-                column_order=["Giocatore", "Convocato", "Titolare", "Minuto ingresso", "Minuto uscita", "Ruolo in campo"],
+                column_order=[
+                    "Giocatore", "Convocato", "Titolare", "Minuto ingresso", "Minuto uscita", "Ruolo in campo",
+                    "Gol", "Assist", "Ammonito", "Espulso",
+                ],
                 column_config={
                     "Minuto ingresso": st.column_config.NumberColumn(min_value=0, max_value=200),
                     "Minuto uscita": st.column_config.NumberColumn(min_value=0, max_value=200),
+                    "Gol": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
+                    "Assist": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
                 },
                 key="distinta_editor",
             )
@@ -174,11 +187,12 @@ else:
         else:
             new_match_id = db.insert_and_get_id(
                 """INSERT INTO matches
-                   (data, avversario, casa_trasferta, modulo, durata_minuti, gol_fatti, gol_subiti, eventi_salienti, note)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (data, avversario, casa_trasferta, modulo, durata_minuti, gol_fatti, gol_subiti, eventi_salienti, note, tipo_partita)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
                     data_match.isoformat(), avversario.strip(), casa_trasferta, modulo.strip(),
                     int(durata_minuti), int(gol_fatti), int(gol_subiti), eventi_salienti.strip(), note_match.strip(),
+                    tipo_match,
                 ],
             )
             if distinta_edited is not None:
@@ -200,5 +214,28 @@ else:
                             row["Ruolo in campo"],
                         ],
                     )
+                    pid = int(row["player_id"])
+                    n_gol = int(row.get("Gol", 0) or 0)
+                    n_assist = int(row.get("Assist", 0) or 0)
+                    for _ in range(n_gol):
+                        db.execute(
+                            "INSERT INTO match_events (match_id, player_id, tipo, minuto, descrizione) VALUES (?, ?, ?, ?, ?)",
+                            [new_match_id, pid, "Gol", None, ""],
+                        )
+                    for _ in range(n_assist):
+                        db.execute(
+                            "INSERT INTO match_events (match_id, player_id, tipo, minuto, descrizione) VALUES (?, ?, ?, ?, ?)",
+                            [new_match_id, pid, "Assist", None, ""],
+                        )
+                    if row.get("Ammonito"):
+                        db.execute(
+                            "INSERT INTO match_events (match_id, player_id, tipo, minuto, descrizione) VALUES (?, ?, ?, ?, ?)",
+                            [new_match_id, pid, "Ammonizione", None, ""],
+                        )
+                    if row.get("Espulso"):
+                        db.execute(
+                            "INSERT INTO match_events (match_id, player_id, tipo, minuto, descrizione) VALUES (?, ?, ?, ?, ?)",
+                            [new_match_id, pid, "Espulsione", None, ""],
+                        )
             st.success(f"Partita contro {avversario} registrata.")
             st.rerun()

@@ -195,6 +195,28 @@ dedicate: **Storico Allenamenti** (elenco sedute, modifica presenze ed
 esercizi, export PDF e statistiche) e **Storico Partite** (elenco partite,
 filtri, distinte ed eventi).
 
+## Partite: tipo partita, gol/assist/cartellini e modifica
+
+Quando registri una nuova partita puoi indicare se si tratta di
+**Campionato**, **Amichevole** o **Torneo**: il tipo viene mostrato nello
+storico (anche tra parentesi quadre nel titolo di ogni partita) e puoi
+filtrare lo storico per tipo.
+
+Nella tabella "Distinta" della nuova partita, oltre a convocati/titolari/
+minuti, puoi ora indicare direttamente gol, assist, ammonizioni ed
+espulsioni di ogni giocatore convocato: vengono salvati subito come eventi
+della partita, visibili nello storico insieme a quelli aggiunti manualmente
+con "Aggiungi evento" (utile per indicare anche il minuto o una
+descrizione).
+
+In **Storico Partite**, come per gli allenamenti, ogni partita ha ora un
+pulsante "✏️ Modifica partita": permette di correggere i dati generali
+(data, tipo, avversario, casa/trasferta, modulo, durata, risultato) e di
+aggiungere o togliere giocatori dalla distinta (convocazione, titolarità,
+minuti). Gol, assist e cartellini restano gestibili dalla sezione "Eventi"
+già presente in ogni partita, per non rischiare di perdere il minuto o la
+descrizione di un evento inserito manualmente.
+
 ## Storico Allenamenti: motivo assenze e PDF riepilogativo
 
 Quando registri un nuovo allenamento e deselezioni un giocatore come assente,

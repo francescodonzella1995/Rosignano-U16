@@ -17,6 +17,10 @@ SEED_FILES = [
     os.path.join(PROJECT_DIR, "data", "pre_preparazione_seed.json"),
 ]
 
+# Tipologie di partita e di evento, condivise tra Inserisci Dati e Storico Partite.
+TIPI_PARTITA = ["Campionato", "Amichevole", "Torneo"]
+TIPI_EVENTO = ["Gol", "Assist", "Ammonizione", "Espulsione", "Infortunio"]
+
 
 @st.cache_resource(show_spinner=False)
 def ensure_db_ready() -> int:
