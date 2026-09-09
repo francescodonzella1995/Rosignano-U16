@@ -11,12 +11,13 @@ project/
 ├── helpers.py                      # Funzioni condivise dalle pagine
 ├── requirements.txt                # Librerie Python richieste
 ├── pages/
-│   ├── 1_🏠_Board_Iniziale.py      # Squadra, colori, rosa (import Excel + manuale)
-│   ├── 2_📘_Eserciziario.py        # Catalogo esercizi di allenamento
-│   ├── 3_📅_Crea_Allenamento.py    # Registro allenamenti svolti + statistiche + export PDF
-│   ├── 4_🏟️_Crea_Partite.py        # Storico partite, distinte, marcatori
-│   ├── 5_📊_Board_Rosa.py          # Statistiche automatiche per giocatore
-│   └── 6_💾_Backup.py              # Esporta/importa una copia di sicurezza dei dati
+│   ├── 1_🏠_Board_Iniziale.py           # Squadra, colori, rosa (import Excel + manuale)
+│   ├── 2_📘_Eserciziario.py             # Catalogo esercizi di allenamento
+│   ├── 3_📝_Inserisci_Dati.py           # Registra un nuovo allenamento o una nuova partita
+│   ├── 4_📅_Storico_Allenamenti.py      # Sedute svolte, modifica, export PDF + statistiche
+│   ├── 5_🏟️_Storico_Partite.py          # Storico partite, distinte, eventi/marcatori
+│   ├── 6_📊_Board_Rosa.py               # Statistiche automatiche per giocatore
+│   └── 7_💾_Backup.py                   # Esporta/importa una copia di sicurezza dei dati
 ├── assets/
 │   ├── manuale/                    # Immagini degli esercizi (dal Keynote esportato in PDF)
 │   └── pre_preparazione/           # Immagini delle schede di pre-preparazione
@@ -184,7 +185,17 @@ esistente) vengono salvate direttamente nel database (Turso), non sul disco
 del server, cosa necessaria perché su Streamlit Cloud i file salvati su disco
 possono andare persi ad ogni redeploy.
 
-## Crea Allenamento: motivo assenze e PDF riepilogativo
+## Inserisci Dati, Storico Allenamenti e Storico Partite
+
+La registrazione di un nuovo allenamento o di una nuova partita avviene ora
+in un'unica board, **Inserisci Dati**: un pulsante a scelta multipla in alto
+permette di passare dall'uno all'altro, con sotto esattamente gli stessi
+campi di prima. Lo storico e le statistiche sono invece divisi in due board
+dedicate: **Storico Allenamenti** (elenco sedute, modifica presenze ed
+esercizi, export PDF e statistiche) e **Storico Partite** (elenco partite,
+filtri, distinte ed eventi).
+
+## Storico Allenamenti: motivo assenze e PDF riepilogativo
 
 Quando registri un nuovo allenamento e deselezioni un giocatore come assente,
 compare subito un campo per indicarne il motivo (facoltativo). Il motivo

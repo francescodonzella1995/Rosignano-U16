@@ -1,121 +1,24 @@
 """
-Crea Partite: storico partite, distinta, eventi (gol/assist/cartellini/infortuni) e filtri.
+Storico Partite: elenco partite, distinte, eventi (gol/assist/cartellini/infortuni) e filtri.
 """
 from __future__ import annotations
 
 import datetime as dt
 
-import pandas as pd
-import streamlit as st
-
 import db
 from helpers import ensure_db_ready, get_players, get_team, player_label, confirm_action, apply_team_theme
+import streamlit as st
 
-st.set_page_config(page_title="Crea Partite", page_icon="🏟️", layout="wide")
+st.set_page_config(page_title="Storico Partite", page_icon="🏟️", layout="wide")
 ensure_db_ready()
 apply_team_theme(get_team())
 
-st.title("🏟️ Crea Partite")
+st.title("🏟️ Storico Partite")
 
 TIPI_EVENTO = ["Gol", "Assist", "Ammonizione", "Espulsione", "Infortunio"]
 
 # ---------------------------------------------------------------------------
-# 1) Registra nuova partita
-# ---------------------------------------------------------------------------
-st.header("Registra nuova partita")
-
-players = get_players(only_active=True)
-
-with st.form("form_new_match"):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        data_match = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY")
-        avversario = st.text_input("Avversario")
-    with c2:
-        casa_trasferta = st.selectbox("Casa / Trasferta", ["Casa", "Trasferta"])
-        modulo = st.text_input("Modulo (es. 1-4-3-3)")
-    with c3:
-        durata_minuti = st.number_input("Durata (minuti)", min_value=0, max_value=200, step=5, value=0)
-        gc1, gc2 = st.columns(2)
-        with gc1:
-            gol_fatti = st.number_input("Gol fatti", min_value=0, step=1, value=0)
-        with gc2:
-            gol_subiti = st.number_input("Gol subiti", min_value=0, step=1, value=0)
-
-    st.markdown("**Distinta**: seleziona i convocati, chi è titolare e i minuti di ingresso/uscita dei subentrati.")
-    if not players:
-        st.info("Nessun giocatore in rosa. Vai alla Board Iniziale per aggiungerli.")
-        distinta_edited = None
-    else:
-        df_distinta = pd.DataFrame(
-            {
-                "player_id": [p["id"] for p in players],
-                "Giocatore": [player_label(p) for p in players],
-                "Convocato": [True for _ in players],
-                "Titolare": [False for _ in players],
-                "Minuto ingresso": [None for _ in players],
-                "Minuto uscita": [None for _ in players],
-                "Ruolo in campo": ["" for _ in players],
-            }
-        )
-        distinta_edited = st.data_editor(
-            df_distinta,
-            width="stretch",
-            num_rows="fixed",
-            disabled=["player_id", "Giocatore"],
-            hide_index=True,
-            column_order=["Giocatore", "Convocato", "Titolare", "Minuto ingresso", "Minuto uscita", "Ruolo in campo"],
-            column_config={
-                "Minuto ingresso": st.column_config.NumberColumn(min_value=0, max_value=200),
-                "Minuto uscita": st.column_config.NumberColumn(min_value=0, max_value=200),
-            },
-            key="distinta_editor",
-        )
-
-    eventi_salienti = st.text_area("Eventi salienti (testo libero, facoltativo)", height=70)
-    note_match = st.text_area("Note (facoltativo)", height=70)
-
-    submitted_match = st.form_submit_button("Salva partita", type="primary")
-
-if submitted_match:
-    if not avversario.strip():
-        st.error("Inserisci il nome dell'avversario.")
-    else:
-        new_match_id = db.insert_and_get_id(
-            """INSERT INTO matches
-               (data, avversario, casa_trasferta, modulo, durata_minuti, gol_fatti, gol_subiti, eventi_salienti, note)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [
-                data_match.isoformat(), avversario.strip(), casa_trasferta, modulo.strip(),
-                int(durata_minuti), int(gol_fatti), int(gol_subiti), eventi_salienti.strip(), note_match.strip(),
-            ],
-        )
-        if distinta_edited is not None:
-            for _, row in distinta_edited.iterrows():
-                if not row["Convocato"]:
-                    continue
-                minuto_ingresso = row["Minuto ingresso"]
-                minuto_uscita = row["Minuto uscita"]
-                db.execute(
-                    """INSERT INTO match_lineup
-                       (match_id, player_id, titolare, minuto_ingresso, minuto_uscita, ruolo_in_campo)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    [
-                        new_match_id,
-                        int(row["player_id"]),
-                        1 if row["Titolare"] else 0,
-                        int(minuto_ingresso) if pd.notna(minuto_ingresso) else None,
-                        int(minuto_uscita) if pd.notna(minuto_uscita) else None,
-                        row["Ruolo in campo"],
-                    ],
-                )
-        st.success(f"Partita contro {avversario} registrata.")
-        st.rerun()
-
-st.divider()
-
-# ---------------------------------------------------------------------------
-# 2) Filtri storico
+# Filtri storico
 # ---------------------------------------------------------------------------
 st.header("Storico partite")
 

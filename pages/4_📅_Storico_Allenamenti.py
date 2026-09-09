@@ -1,5 +1,5 @@
 """
-Crea Allenamento: registro delle sedute svolte + statistiche/insight.
+Storico Allenamenti: elenco delle sedute svolte, modifica, PDF ed statistiche.
 """
 from __future__ import annotations
 
@@ -12,103 +12,16 @@ import db
 from helpers import ensure_db_ready, get_players, get_team, player_label, confirm_action, apply_team_theme
 from pdf_export import build_training_pdf
 
-st.set_page_config(page_title="Crea Allenamento", page_icon="📅", layout="wide")
+st.set_page_config(page_title="Storico Allenamenti", page_icon="📅", layout="wide")
 ensure_db_ready()
 apply_team_theme(get_team())
 
-st.title("📅 Crea Allenamento")
+st.title("📅 Storico Allenamenti")
 
 GIORNI_IT = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
 # ---------------------------------------------------------------------------
-# 1) Registra nuovo allenamento
-# ---------------------------------------------------------------------------
-st.header("Registra nuovo allenamento")
-
-players = get_players(only_active=True)
-
-# NB: questa sezione non usa st.form perché il campo "motivo assenza" deve
-# comparire subito, appena si deseleziona un giocatore — con un form i
-# widget non si aggiornano finché non si preme il pulsante di invio finale.
-c1, c2, c3 = st.columns(3)
-with c1:
-    data_all = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY", key="new_training_data")
-with c2:
-    ora_all = st.time_input("Ora", value=dt.time(18, 0), key="new_training_ora")
-with c3:
-    durata_all = st.number_input(
-        "Durata (minuti)", min_value=0, max_value=300, step=5, value=0, key="new_training_durata"
-    )
-
-st.markdown("**Presenze** (tutti selezionati come presenti di default, deseleziona gli assenti e indica il motivo)")
-presenze: dict[int, bool] = {}
-motivi: dict[int, str] = {}
-if not players:
-    st.info("Nessun giocatore in rosa. Vai alla Board Iniziale per aggiungerli.")
-else:
-    n_cols = 3
-    cols = st.columns(n_cols)
-    for i, p in enumerate(players):
-        with cols[i % n_cols]:
-            presenze[p["id"]] = st.checkbox(player_label(p), value=True, key=f"presente_{p['id']}")
-            if not presenze[p["id"]]:
-                motivi[p["id"]] = st.text_input(
-                    f"Motivo assenza di {player_label(p)}",
-                    key=f"motivo_{p['id']}",
-                    placeholder="es. infortunio, scuola, permesso...",
-                    label_visibility="collapsed",
-                )
-
-st.markdown("**Esercizi svolti**")
-categorie_disponibili = sorted({e["categoria"] for e in db.query_all("SELECT DISTINCT categoria FROM exercises")})
-filtro_cat = st.multiselect(
-    "Filtra esercizi per categoria", categorie_disponibili, default=[], key="new_training_filtro_cat"
-)
-
-ex_query = "SELECT id, categoria, nome FROM exercises"
-ex_params: list = []
-if filtro_cat:
-    placeholders = ",".join("?" for _ in filtro_cat)
-    ex_query += f" WHERE categoria IN ({placeholders})"
-    ex_params.extend(filtro_cat)
-ex_query += " ORDER BY categoria, nome"
-esercizi_disponibili = db.query_all(ex_query, ex_params)
-ex_options = {f"[{e['categoria']}] {e['nome']}": e["id"] for e in esercizi_disponibili}
-esercizi_scelti_label = st.multiselect(
-    "Seleziona esercizi svolti", list(ex_options.keys()), key="new_training_esercizi"
-)
-
-note_all = st.text_area("Note (facoltativo)", height=70, key="new_training_note")
-
-submitted_training = st.button("Salva allenamento", type="primary", key="submit_new_training")
-
-if submitted_training:
-    if not players:
-        st.error("Non ci sono giocatori in rosa: aggiungili prima nella Board Iniziale.")
-    else:
-        new_id = db.insert_and_get_id(
-            "INSERT INTO trainings (data, ora, durata_minuti, note) VALUES (?, ?, ?, ?)",
-            [data_all.isoformat(), ora_all.strftime("%H:%M"), int(durata_all), note_all.strip()],
-        )
-        for pid, presente in presenze.items():
-            motivo_pid = (motivi.get(pid, "") or "").strip() if not presente else ""
-            db.execute(
-                "INSERT INTO training_attendance (training_id, player_id, presente, motivo) VALUES (?, ?, ?, ?)",
-                [new_id, pid, 1 if presente else 0, motivo_pid],
-            )
-        for label in esercizi_scelti_label:
-            ex_id = ex_options[label]
-            db.execute(
-                "INSERT INTO training_exercises (training_id, exercise_id) VALUES (?, ?)",
-                [new_id, ex_id],
-            )
-        st.success(f"Allenamento del {data_all.strftime('%d/%m/%Y')} registrato.")
-        st.rerun()
-
-st.divider()
-
-# ---------------------------------------------------------------------------
-# 2) Storico allenamenti
+# 1) Storico allenamenti
 # ---------------------------------------------------------------------------
 st.header("Storico allenamenti")
 
@@ -313,7 +226,7 @@ else:
 st.divider()
 
 # ---------------------------------------------------------------------------
-# 3) Insight / statistiche
+# 2) Insight / statistiche
 # ---------------------------------------------------------------------------
 st.header("Statistiche")
 
