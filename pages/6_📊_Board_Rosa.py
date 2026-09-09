@@ -74,6 +74,87 @@ def compute_player_stats(player_id: int) -> dict:
     }
 
 
+TIPO_EVENTO_TO_CAMPO = {
+    "Gol": "gol",
+    "Assist": "assist",
+    "Ammonizione": "ammonizioni",
+    "Espulsione": "espulsioni",
+    "Infortunio": "infortuni_in_partita",
+}
+
+
+def compute_all_stats(player_ids: list[int]) -> dict[int, dict]:
+    """Come compute_player_stats, ma per più giocatori insieme con un numero
+    fisso di query (3 in totale) invece di ripeterle per ognuno.
+
+    Con una rosa numerosa, calcolare le statistiche un giocatore alla volta
+    significa fare 4 query al database per ciascuno: su un database remoto
+    come Turso, ogni query è un giro di rete, quindi la pagina impiega
+    diversi secondi a comparire (sembrando "vuota" nel frattempo). Qui invece
+    si scaricano tutte le righe una sola volta e si smistano in Python.
+    """
+    stats: dict[int, dict] = {
+        pid: {
+            "presenze": 0, "titolarita": 0, "minuti_totali": 0,
+            "gol": 0, "assist": 0, "ammonizioni": 0, "espulsioni": 0, "infortuni_in_partita": 0,
+            "allenamenti_presenti": 0, "allenamenti_assenti": 0, "perc_presenza_allenamenti": None,
+        }
+        for pid in player_ids
+    }
+    if not player_ids:
+        return stats
+
+    lineup_rows = db.query_all(
+        """SELECT ml.player_id, ml.titolare, ml.minuto_ingresso, ml.minuto_uscita, m.durata_minuti
+           FROM match_lineup ml JOIN matches m ON m.id = ml.match_id"""
+    )
+    for r in lineup_rows:
+        s = stats.get(r["player_id"])
+        if s is None:
+            continue
+        giocato = False
+        if r["titolare"]:
+            s["titolarita"] += 1
+            giocato = True
+            fine = r["minuto_uscita"] if r["minuto_uscita"] is not None else r["durata_minuti"]
+            if fine:
+                s["minuti_totali"] += fine
+        elif r["minuto_ingresso"] is not None:
+            giocato = True
+            fine = r["minuto_uscita"] if r["minuto_uscita"] is not None else r["durata_minuti"]
+            if fine and fine > r["minuto_ingresso"]:
+                s["minuti_totali"] += fine - r["minuto_ingresso"]
+        if giocato:
+            s["presenze"] += 1
+
+    eventi_rows = db.query_all(
+        "SELECT player_id, tipo, COUNT(*) AS c FROM match_events WHERE player_id IS NOT NULL GROUP BY player_id, tipo"
+    )
+    for r in eventi_rows:
+        s = stats.get(r["player_id"])
+        campo = TIPO_EVENTO_TO_CAMPO.get(r["tipo"])
+        if s is not None and campo is not None:
+            s[campo] = r["c"]
+
+    att_rows = db.query_all(
+        "SELECT player_id, presente, COUNT(*) AS c FROM training_attendance GROUP BY player_id, presente"
+    )
+    for r in att_rows:
+        s = stats.get(r["player_id"])
+        if s is None:
+            continue
+        if r["presente"]:
+            s["allenamenti_presenti"] = r["c"]
+        else:
+            s["allenamenti_assenti"] = r["c"]
+
+    for s in stats.values():
+        tot = s["allenamenti_presenti"] + s["allenamenti_assenti"]
+        s["perc_presenza_allenamenti"] = round(s["allenamenti_presenti"] / tot * 100, 1) if tot > 0 else None
+
+    return stats
+
+
 # ---------------------------------------------------------------------------
 # 1) Panoramica rosa
 # ---------------------------------------------------------------------------
@@ -85,26 +166,28 @@ players = get_players(only_active=not mostra_inattivi_rosa)
 if not players:
     st.info("Nessun giocatore in rosa. Vai alla Board Iniziale per aggiungerli.")
 else:
-    rows = []
-    for p in players:
-        s = compute_player_stats(p["id"])
-        rows.append(
-            {
-                "Giocatore": player_label(p),
-                "Ruolo": p.get("ruolo") or "",
-                "Presenze partite": s["presenze"],
-                "Titolarità": s["titolarita"],
-                "Minuti giocati": s["minuti_totali"],
-                "Gol": s["gol"],
-                "Assist": s["assist"],
-                "Ammonizioni": s["ammonizioni"],
-                "Espulsioni": s["espulsioni"],
-                "All. presenti": s["allenamenti_presenti"],
-                "All. assenti": s["allenamenti_assenti"],
-                "% presenza all.": s["perc_presenza_allenamenti"],
-            }
-        )
-    df_overview = pd.DataFrame(rows)
+    with st.spinner("Calcolo statistiche della rosa..."):
+        all_stats = compute_all_stats([p["id"] for p in players])
+        rows = []
+        for p in players:
+            s = all_stats[p["id"]]
+            rows.append(
+                {
+                    "Giocatore": player_label(p),
+                    "Ruolo": p.get("ruolo") or "",
+                    "Presenze partite": s["presenze"],
+                    "Titolarità": s["titolarita"],
+                    "Minuti giocati": s["minuti_totali"],
+                    "Gol": s["gol"],
+                    "Assist": s["assist"],
+                    "Ammonizioni": s["ammonizioni"],
+                    "Espulsioni": s["espulsioni"],
+                    "All. presenti": s["allenamenti_presenti"],
+                    "All. assenti": s["allenamenti_assenti"],
+                    "% presenza all.": s["perc_presenza_allenamenti"],
+                }
+            )
+        df_overview = pd.DataFrame(rows)
     st.dataframe(df_overview, width="stretch", hide_index=True)
 
 st.divider()
